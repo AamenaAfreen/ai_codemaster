@@ -1,0 +1,255 @@
+import os
+import random
+from codenames.players.gpt_manager import game_rules, GPT
+from codenames.players.guesser import Guesser
+
+
+class AIGuesser(Guesser):
+    """
+    Guesser that uses GPT.
+    Now supports the SAME strategy names as the Codemaster:
+    - "Default"
+    - "Cautious"
+    - "Risky"
+    - "COT"  (chain-of-thought, 2-step)
+    - "Self Refine"
+    - "Solo Performance"
+    """
+
+    def __init__(self, team: str = "Red", strategy: str = "Default"):
+        super().__init__()
+        self.team = team
+        self.strategy = strategy  # <— new
+        self.num = 0
+        self.guesses = 0
+
+        system_prompt = (
+            game_rules
+            + f"You are playing the game Codenames as the {team} Guesser. "
+            + "Never reveal hidden roles. Only return guesses when asked. "
+        )
+        self.manager = GPT(system_prompt=system_prompt, version="gpt-4o-2024-05-13")
+
+    # ---------------- basic setup ----------------
+
+    def set_board(self, words):
+        # board words can have * markers, we will filter them later
+        self.words = words
+
+    def set_clue(self, clue, num):
+        self.clue = clue
+        self.num = int(num)
+        self.guesses = 0
+        # we keep the strategy from __init__, but you could also pass it per-turn here
+        print("The clue is:", clue, num)
+        return [clue, num]
+
+    # ---------------- helpers ----------------
+
+    def get_remaining_options(self):
+        remaining_options = []
+        for w in self.words:
+            # skip already revealed ones
+            if len(w) > 0 and w[0] == "*":
+                continue
+            remaining_options.append(w)
+        return remaining_options
+
+    # ---------------- keep guessing? ----------------
+
+    def keep_guessing(self):
+        """
+        Different prompt-engineering styles for deciding whether to keep guessing.
+        """
+        label = str(getattr(self, "strategy", "Default")).strip().lower()
+
+        # hard stop for cautious: guess at most 1 word per turn
+        if label == "cautious":
+            return self.guesses < 1
+
+        # risky: try to use up to num + 1 guesses, no GPT needed
+        if label == "risky":
+            max_allowed = (self.num or 0) + 1
+            return self.guesses < max_allowed
+
+        # other strategies → ask the model, but with slightly different instructions
+        invalid_timer = 0
+        response = None
+
+        while response is None and (self.guesses < self.num or self.num == 0):
+            base = (
+                "The remaining words are: " + str(self.get_remaining_options()) + ". "
+                + f"The Codemaster's clue is: ({self.clue}, {self.num}). "
+                + f"You have already picked {self.guesses} words this turn. "
+            )
+
+            if label == "cot":
+                prompt = (
+                    base
+                    + "Think step by step whether there are still high-confidence targets left. "
+                    + "Then answer ONLY 'yes' or 'no'."
+                )
+            elif label in {"self refine", "self-refine", "self_refine"}:
+                prompt = (
+                    base
+                    + "Decide if there is another SAFE guess that is very likely to be your team's word. "
+                    + "If you are unsure, answer 'no'. Answer ONLY 'yes' or 'no'."
+                )
+            elif label in {"solo performance", "solo-performance", "solo_performance"}:
+                prompt = (
+                    base
+                    + "First internally evaluate remaining options, but output ONLY 'yes' or 'no'. "
+                    + "Say 'yes' if there is at least one strong candidate."
+                )
+            else:  # default (same as your old code)
+                prompt = (
+                    base
+                    + "Would you like to keep guessing? Answer only 'yes' or 'no'. "
+                )
+
+            response = self.manager.talk_to_ai(prompt)
+            if isinstance(response, str) and "yes" in response.lower():
+                return True
+            if isinstance(response, str) and "no" in response.lower():
+                return False
+
+            invalid_timer += 1
+            if invalid_timer > 10:
+                return False
+            response = None  # loop again
+
+        return False
+
+    # ---------------- guess a word ----------------
+
+    def get_answer(self):
+        """
+        Different prompt-engineering styles for choosing the next word.
+        """
+        label = str(getattr(self, "strategy", "Default")).strip().lower()
+        invalid_timer = 0
+        guess = None
+
+        while guess is None:
+            remaining = self.get_remaining_options()
+
+            # ---------- DEFAULT ----------
+            if label == "default":
+                prompt = (
+                    "The remaining words are: " + str(remaining) + ". "
+                    + f"The Codemaster's clue is: ({self.clue}, {self.num}). "
+                    + "Select ONE of the remaining words that is MOST associated with this clue. "
+                    + "Return ONLY the word, no extra text."
+                )
+
+                response = self.manager.talk_to_ai(prompt)
+
+            # ---------- CAUTIOUS ----------
+            elif label == "cautious":
+                prompt = (
+                    "You must be careful and avoid wrong picks. "
+                    "The remaining words are: " + str(remaining) + ". "
+                    + f"The Codemaster's clue is: ({self.clue}, {self.num}). "
+                    + "Pick the SINGLE safest word (the one that is clearly linked). "
+                    + "If multiple words are possible, pick the one with the strongest and most obvious link. "
+                    + "Return ONLY the word."
+                )
+                response = self.manager.talk_to_ai(prompt)
+
+            # ---------- RISKY ----------
+            elif label == "risky":
+                prompt = (
+                    "You can be aggressive. "
+                    "The remaining words are: " + str(remaining) + ". "
+                    + f"The Codemaster's clue is: ({self.clue}, {self.num}). "
+                    + "Pick the word that is MOST LIKELY intended, even if there is a bit of risk. "
+                    + "Return ONLY the word."
+                )
+                response = self.manager.talk_to_ai(prompt)
+
+            # ---------- CHAIN OF THOUGHT ----------
+            elif label == "cot":
+                # step 1: reason
+                reasoning_prompt = (
+                    "We are playing Codenames.\n"
+                    f"Clue: ({self.clue}, {self.num}).\n"
+                    f"Remaining words: {remaining}.\n"
+                    "Think step by step about which remaining word best matches the clue. "
+                    "List the top 3 candidates and score them 0–1.\n"
+                    "Do NOT output the final guess yet."
+                )
+                _ = self.manager.talk_to_ai(reasoning_prompt)
+
+                # step 2: final
+                prompt = (
+                    f"Now give me ONLY the single final guess word for the clue ({self.clue}, {self.num}) "
+                    f"from this list: {remaining}. Return ONLY the word."
+                )
+                response = self.manager.talk_to_ai(prompt)
+
+            # ---------- SELF REFINE ----------
+            elif label in {"self refine", "self-refine", "self_refine"}:
+                # initial raw guess
+                initial_prompt = (
+                    "The remaining words are: " + str(remaining) + ". "
+                    + f"The Codemaster's clue is: ({self.clue}, {self.num}). "
+                    + "Pick the most likely word. Return ONLY the word."
+                )
+                initial_guess = self.manager.talk_to_ai(initial_prompt)
+
+                critique_prompt = (
+                    f"You guessed: {initial_guess}. "
+                    f"Clue: ({self.clue}, {self.num}). Remaining words: {remaining}. "
+                    "Check if this guess could accidentally be Blue/Civilian/Assassin if this were a real board. "
+                    "If the guess is risky, suggest a safer one from the remaining words. "
+                    "Return ONLY the final safest word."
+                )
+                response = self.manager.talk_to_ai(critique_prompt)
+
+            # ---------- SOLO PERFORMANCE ----------
+            elif label in {"solo performance", "solo-performance", "solo_performance"}:
+                prompt = (
+                    "Act as a strong Codenames guesser. "
+                    f"Clue: ({self.clue}, {self.num}). "
+                    f"Remaining words: {remaining}. "
+                    "Internally do the reasoning, but output ONLY the final chosen word."
+                )
+                response = self.manager.talk_to_ai(prompt)
+
+            # ---------- fallback ----------
+            else:
+                prompt = (
+                    "The remaining words are: " + str(remaining) + ". "
+                    + f"The Codemaster's clue is: ({self.clue}, {self.num}). "
+                    + "Select one of the remaining words that is most associated with this clue. "
+                    + "You must select one of the remaining words and provide no additional text."
+                )
+                response = self.manager.talk_to_ai(prompt)
+
+            # ---------- parse ----------
+            if not isinstance(response, str):
+                response = str(response)
+
+            candidate = response.strip().upper()
+
+            # plain match
+            if candidate in self.words:
+                guess = candidate
+            # first token
+            elif candidate.split(" ")[0].strip() in self.words:
+                guess = candidate.split(" ")[0].strip()
+            # quoted
+            elif len(response.split('"')) > 2 and response.split('"')[1].upper() in self.words:
+                guess = response.split('"')[1].upper()
+            elif len(response.split("'")) > 2 and response.split("'")[1].upper() in self.words:
+                guess = response.split("'")[1].upper()
+            # too many bad tries → pick random
+            elif invalid_timer > 10:
+                print("You have made too many invalid guesses, selecting random remaining word")
+                guess = random.choice(remaining)
+            else:
+                print("Warning! Invalid guess from model:", candidate)
+                invalid_timer += 1
+
+        self.guesses += 1
+        return guess

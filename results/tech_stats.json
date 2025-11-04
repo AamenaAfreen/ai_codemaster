@@ -1,0 +1,13 @@
+{
+  "Mock": {
+    "Cautious": {
+      "runs": 1,
+      "wins": 0,
+      "losses": 1,
+      "turns": [
+        6
+      ]
+    }
+  },
+  "OpenAI": {}
+}

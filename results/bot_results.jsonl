@@ -1,0 +1,1 @@
+{"game_name": "ui_run", "total_turns": 25, "R": 0, "B": 2, "C": 3, "A": 1, "codemaster": "AICodemaster", "guesser": "AIGuesser", "seed": 1761777417.78603, "time_s": 0.4472527503967285, "cm_kwargs": {"strategy": "Cautious"}, "g_kwargs": {}}
