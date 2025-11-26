@@ -1,6 +1,11 @@
 import os
 from openai import OpenAI
-openAI_api_key = "<ADD API KEY>"
+import time
+from openai import RateLimitError
+import random
+from google import genai
+api_key = os.getenv("OPENAI_API_KEY")
+api_key = os.getenv("GEMINI_API_KEY")
 
 
 game_rules = """
@@ -30,37 +35,177 @@ All of the words of the other team's colour have been selected -- you lose
 You select the assassin tile -- you lose
 
 """
-
 class GPT:
-
-    def __init__(self, system_prompt, version):
+    def __init__(self, system_prompt, version, provider=None):
         super().__init__()
+
+        # "openai" or "gemini"
+        self.provider = (provider or os.getenv("LLM_PROVIDER", "openai")).lower()
         self.model_version = version
-        self.client = OpenAI(api_key=openAI_api_key)
+
+        if self.provider == "openai":
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                raise RuntimeError("OPENAI_API_KEY env var is not set")
+            self.client = OpenAI(api_key=api_key)
+
+        elif self.provider == "gemini":
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                raise RuntimeError("GEMINI_API_KEY env var is not set")
+            self.client = genai.Client(api_key=api_key)
+
+        else:
+            raise ValueError(f"Unknown LLM provider: {self.provider}")
+
         self.conversation_history = [{"role": "system", "content": system_prompt}]
-    
+
     def _mock_reply(self, prompt: str) -> str:
         text = prompt.lower()
         if "codemaster" in text or "clue" in text:
-            return "('animal',2)"    
+            return "('animal',2)"
         if "guess" in text:
-            return "DOG, CAT"        
+            return "DOG, CAT"
         return "SAFE"
 
-    def talk_to_ai(self, prompt):
-
+    def talk_to_ai(self, prompt: str, max_retries: int = 5) -> str:
+        """
+        Send a message to the model, with:
+        - optional mock mode (MOCK_GPT=1)
+        - retry on RateLimitError for OpenAI
+        """
+        # Add user message
         self.conversation_history.append({"role": "user", "content": prompt})
-        
+
+        # Mock mode for debugging / no-API runs
         if os.getenv("MOCK_GPT") == "1":
             response = self._mock_reply(prompt)
-            self.conversation_history.append({"role": "assistant", "content": response})
+            self.conversation_history.append(
+                {"role": "assistant", "content": response}
+            )
             return response
+
+        # ---------- OpenAI path ----------
+        if self.provider == "openai":
+            for attempt in range(max_retries):
+                try:
+                    completion = self.client.chat.completions.create(
+                        messages=self.conversation_history,
+                        model=self.model_version,
+                        max_tokens=512,
+                    )
+                    response = completion.choices[0].message.content
+                    self.conversation_history.append(
+                        {"role": "assistant", "content": response}
+                    )
+                    return response
+
+                except RateLimitError as e:
+                    if attempt == max_retries - 1:
+                        raise
+                    wait_time = (2 ** attempt) + random.random()
+                    print(
+                        f"[RateLimit] {e}. "
+                        f"Retrying in {wait_time:.1f}s (attempt {attempt + 1}/{max_retries})..."
+                    )
+                    time.sleep(wait_time)
+
+        # ---------- Gemini path ----------
+        if self.provider == "gemini":
+            # Flatten conversation into a single text block
+            history_text = ""
+            for msg in self.conversation_history:
+                role = msg["role"].upper()
+                content = msg["content"]
+                history_text += f"{role}: {content}\n"
+            history_text += "ASSISTANT:"
+
+            resp = self.client.models.generate_content(
+                model=self.model_version,  # e.g. "gemini-2.5-flash"
+                contents=history_text,
+            )
+            response = resp.text
+            self.conversation_history.append(
+                {"role": "assistant", "content": response}
+            )
+            return response
+
+        raise RuntimeError(f"Unsupported provider: {self.provider}")
+
+# class GPT:
+
+#     def __init__(self, system_prompt, version):
+#         super().__init__()
+#         self.model_version = version
+#         self.client = OpenAI(api_key=openAI_api_key)
+#         self.conversation_history = [{"role": "system", "content": system_prompt}]
+    
+#     def _mock_reply(self, prompt: str) -> str:
+#         text = prompt.lower()
+#         if "codemaster" in text or "clue" in text:
+#             return "('animal',2)"    
+#         if "guess" in text:
+#             return "DOG, CAT"        
+#         return "SAFE"
+#     def talk_to_ai(self, prompt: str, max_retries: int = 5) -> str:
+#         """
+#         Send a message to the model, with:
+#         - optional mock mode (MOCK_GPT=1)
+#         - retry on RateLimitError
+#         """
+#         # Add user message to the conversation
+#         self.conversation_history.append({"role": "user", "content": prompt})
         
-        response = self.client.chat.completions.create(
-            messages=self.conversation_history,
-            model=self.model_version,
-            max_tokens=512
-        ).choices[0].message.content
-        self.conversation_history.append({"role": "assistant", "content": response})
-        return response
+#         # Mock mode for debugging / no-API runs
+#         if os.getenv("MOCK_GPT") == "1":
+#             response = self._mock_reply(prompt)
+#             self.conversation_history.append(
+#                 {"role": "assistant", "content": response}
+#             )
+#             return response
+
+#         # Real API call with retries
+#         for attempt in range(max_retries):
+#             try:
+#                 completion = self.client.chat.completions.create(
+#                     messages=self.conversation_history,
+#                     model=self.model_version,
+#                     max_tokens=512,
+#                 )
+#                 response = completion.choices[0].message.content
+#                 # Save assistant reply to history
+#                 self.conversation_history.append(
+#                     {"role": "assistant", "content": response}
+#                 )
+#                 return response
+
+#             except RateLimitError as e:
+#                 # If we've exhausted retries, re-raise the error
+#                 if attempt == max_retries - 1:
+#                     raise
+
+#                 # Exponential backoff (1s, 2s, 4s, ...)
+#                 wait_time = (2 ** attempt) + random.random()
+#                 print(
+#                     f"[RateLimit] {e}. "
+#                     f"Retrying in {wait_time:.1f}s (attempt {attempt + 1}/{max_retries})..."
+#                 )
+#                 time.sleep(wait_time)
+
+#     # def talk_to_ai(self, prompt):
+
+#     #     self.conversation_history.append({"role": "user", "content": prompt})
+        
+#     #     if os.getenv("MOCK_GPT") == "1":
+#     #         response = self._mock_reply(prompt)
+#     #         self.conversation_history.append({"role": "assistant", "content": response})
+#     #         return response
+        
+#     #     response = self.client.chat.completions.create(
+#     #         messages=self.conversation_history,
+#     #         model=self.model_version,
+#     #         max_tokens=512
+#     #     ).choices[0].message.content
+#     #     self.conversation_history.append({"role": "assistant", "content": response})
+#     #     return response
 
