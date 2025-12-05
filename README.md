@@ -1,74 +1,65 @@
 # Codenames AI Competition Framework
-
-This is the Codenames AI Competition Framework.  The purpose of this framework is to enable an AI competition for the game "Codenames" by Vlaada Chvatil.  There are large number of AI competitions built around games (and even more platforms using games as a testbed for AI), but with few exceptions these have focused on things that AI is likely to be good at (fine, pixel-perfect control or search through a large state space).  The purpose of this competition is to test AI in a framework that:
+This is the Codenames AI Competition Framework. In this version, the focus is on LLM-based Codemaster and Guesser agents (OpenAI + Gemini) and course/research experiments for the game "Codenames" by Vlaada Chvátil. There are a large number of AI competitions built around games (and even more platforms using games as a testbed for AI), but with few exceptions these have focused on things that AI is likely to be good at (fine, pixel-perfect control or search through a large state space). The purpose of this framework is to test AI in a framework that:
 
 * Requires the understanding of language
-* Requires communication, in a semantically meaningful way, with players of unknown provenance --  the player on the other side of the table may be a human or it may be another, unaffiliated, bot
-* Requires understanding words with multiple meanings
+* Requires communication, in a semantically meaningful way, with another agent (Codemaster/Guesser)
+* Requires understanding words with multiple meanings and avoiding dangerous associations (e.g., Assassin)
+* Supports LLM Codemaster–Guesser agents with multiple prompt-engineering strategies
 
 **Further installation requirements are found below.**
 
 ## Submissions
+The original version of this codebase was used for an open AI competition.
+In this fork, it is primarily used for course projects and experiments.
 
-Entrants in the competition will be able to submit up to two bots (at most 1 Codemaster and 1 Guesser)
+You can still “submit” agents to the framework by:
+* Implementing a Codemaster bot as a Python 3 class that derives from Codemaster (in codemaster.py), and
+* Implementing a Guesser bot as a Python 3 class that derives from Guesser (in guesser.py), and then run from the Streamlit dashboard (ui_app.py).
 
-## Running the game from terminal instructions
+The setup in this project is:
+* Codemaster: codenames.players.codemaster_gpt.AICodemaster
+* Guesser: codenames.players.guesser_gpt.AIGuesser with a chosen prompt strategy (e.g., Default, Cautious, Risky, COT, Self Refine, Solo Performance).
 
-To run the game, the terminal will require a certain amount of arguments.
-Where the order is:
-* args[0] = run_game.py
-* args[1] = package.MyCodemasterClass
-* args[2] = package.MyGuesserClass
+## Running the game from the Streamlit dashboard
 
-**run_game.py simply handles system arguments then called game.Game().
-See below for more details about calling game.Game() directly.**
+The main way to run experiments in this version is via the Streamlit UI. 
+* From the repository root: streamlit run ui_app.py
+* This launches a web app titled “Codenames GPT”.
+  * Sidebar controls
+    In the left sidebar, under “Run a new game”, you can configure:
+    Backend - A radio button:
+    * Mock (no API calls) – uses a simple mock GPT for fast debugging
+    * OpenAI (GPT-4o) – uses OpenAI (model selected in the GPT agents)
+    * Gemini – uses Gemini (model selected in the GPT agents)
+    The selected backend sets the LLM_PROVIDER environment variable so that gpt_manager.py knows whether to use OpenAI or Gemini.In Mock mode, MOCK_GPT=1 is set in the environment and no real API calls are made.
+  * Strategies - it has two dropdowns:
+    * Codemaster strategy (for AICodemaster)
+    * Guesser strategy (for AIGuesser)
+    Supported strategy labels shared by Codemaster and Guesser are Default, Cautious, Risky, COT, Self Refine, Solo Performance.
+  * Single game vs batch of 10 fixed boards
+    * Checkbox: Use my 10 fixed boards (batch) and it runs the chosen Codemaster/Guesser strategy pair on 10 predefined seeds, stored in       FIXED_BOARD_SEEDS in ui_app.py.
+    * Unchecked → run a single game on a random seed (seed="time").
+  * Run button: A caption under the button shows where the run will be saved, e.g.:Saves to: results/NoMockMode/CM-Default__G-Default
 
-Optionally if certain word vectors are needed, the directory to which should be specified in the arguments here.
-5 argument parsers have been provided:
-* --w2v *path/to/word_vectors*
-  * (to be loaded by gensim)
-* --glove *path/to/glove_vectors*
-  *  (in stanford nlp format)
-* --wordnet ic-brown.dat or ic-semcor.dat
-  * (nltk corpus filename)
+## What is displayed
+In the main panel, the UI displays:
+* The 5×5 board of Codenames words.
+* Optional reveal of the underlying roles (Red, Blue, Civilian, Assassin).
+* A legend explaining tile colors.
+* A timeline of events (start, each clue, each guess).
+* A summary showing:
+  * Seed
+  * Win / loss
+  * Number of turns
+  * Score (including “paper-style” score: turns for wins, 25 for losses)
+* The UI also maintains an aggregated statistics file (results/tech_stats.json) with:
+  * Number of runs, wins, losses
+  * List of turns per run
+  * “Paper-style” scores (turns if win, 25 if loss), following the CoG 2024 scoring scheme with separate buckets for:
+     * Mock (mock GPT runs)
+     * OpenAI (OpenAI backend)
+     * Gemini (Gemini backend).
 
-* --glove_cm *path/to/glove_vectors*
-  * (legacy argument for glove_glove.py)
-* --glove_guesser *path/to/glove_vectors*
-  * (legacy argument for glove_glove.py)
-
-An optional seed argument can be used for the purpose of consistency against the random library.
-* --seed *Integer value* or "time"
-  * ("time" uses Time.time() as the seed)
-
-Other optional arguments include:
-* --no_log
-  * raise flag for suppressing logging
-* --no_print
-  * raise flag for suppressing printing to std out
-* --game_name *String*
-  * game_name in logfile
-
-An example simulation of a *wordnet codemaster* and a *word2vec guesser* in the terminal from codenames/:  
-`$ python run_game.py players.codemaster_wn_lin.AICodemaster players.guesser_w2v.AIGuesser --seed 3442 --w2v players/GoogleNews-vectors-negative300.bin  --wordnet ic-brown.dat`
-
-An example of running glove codemaster and glove guesser with different glove vectors (removed glove_glove.py)
-`$ python run_game.py players.codemaster_glove_07.AICodemaster players.guesser_glove.AIGuesser --seed 3442 --glove_cm players/glove.6B.50d.txt --glove_guesser players/glove.6B.100d.txt`
-
-## Running the game from calling Game(...).run()
-
-The class Game() that can be imported from game.Game is the main framework class.
-
-An example of calling generalized vector codemaster and guesser from python code rather than command line
-```
-    cm_kwargs = {"vectors": [w2v, glove_50d, glove_100d], "distance_threshold": 0.3, "same_clue_patience": 1, "max_red_words_per_clue": 3}
-    g_kwargs = {"vectors": [w2v, glove_50d, glove_100d]}
-    Game(VectorCodemaster, VectorGuesser, seed=0, do_print=False,  game_name="vectorw2vglvglv03-vectorw2vglvglv", cm_kwargs=cm_kwargs, g_kwargs=g_kwargs).run()
-```
-
-See simple_example.py for an example of sharing word vectors,
-passing kwargs to guesser/codemaster through Game,
-and calling Game.run() directly.
 
 ## Game Class
 
@@ -112,12 +103,16 @@ get_clue() -> Tuple[str,int]
 ```
 #### *details*
 
-'__init__' **kwargs are passed through (can be used to pass pre-loaded word vectors to reduce load times for common NLP resources).  Some common examples are the Brown Corpus from NLTK's wordnet, the multi-dimensional GloVe vectors, and the 300 dimensional pre-trained Google NewsNewsBin word2vec vectors.
+'__init__' sets up any internal state your Codemaster needs.
+In this LLM-based version, for example, AICodemaster takes:
+* team (e.g., "Red")
+* strategy (e.g., "Default", "Cautious", "Risky", "COT", "Self Refine", "Solo Performance")
+and constructs a GPT manager from gpt_manager.py with an appropriate system prompt.
 
 `set_game_state` is passed the list of words on the board, as well as the key grid provided to spymasters (codemasters).  The `words` are either: an all upper case word found in the English language or one of 4 special tokens: `'*Red*', '*Blue*', '*Civilian*', '*Assassin*'` indicating that the word that was originally at that location has been guessed and been found to be of that type.  The `key_grid` is a list of `'*Red*', '*Blue*', '*Civilian*', '*Assassin*'` indicating whether a spot on the board is on the team of the codemaster (`'*Red*'`), the opposing team (`'*Blue*'`), a civilian (`'*Civilian*'`), or the assassin (`'*Assassin*'`).
 
-
 `get_clue` returns a tuple containing the clue, a single English word, and the number of words the Codemaster intends it to cover.
+In codemaster_gpt.AICodemaster, this is produced by prompting an LLM with the remaining board state and the chosen strategy.
 
 ## Guesser Class
 
@@ -133,15 +128,17 @@ get_answer() -> Str
 
 #### *details*
 
-`__init__` is as above with the codemaster.
+`__init__` is analogous to the Codemaster, and in the GPT-based Guesser (AIGuesser) is used to set up the GPT manager and a strategy label.
 
 `set_board` is passed the list of words on the board.  The `words` are either: an all upper case word found in the English language or one of 4 special tokens: `'*Red*', '*Blue*', '*Civilian*', '*Assassin*'` indicating that the word that was originally at that location has been guessed and been found to be of that type.
 
 `set_clue` is passed the clue and the number of guesses it covers, as supplied by the `get_clue` of the codemaster through the Game class.
 
-`keep_guessing` is a function that the game engine checks to see if the bot chooses to keep guessing, as the bot must only make at least one guess, but may choose to guess until it has gone to the number supplied by get_clue + 1.
+`keep_guessing` is a function that the game engine checks to see if the bot chooses to keep guessing, as the bot must only make at least one guess, but may choose to guess until it has gone to the number supplied by get_clue + 1. In the GPT-based Guesser, some strategies (e.g. Cautious / Risky) use simple numeric rules, while others (e.g. Default / COT / Self Refine / Solo Performance) ask the LLM whether to continue.
 
 `get_answer` returns the current guess of the Guesser, given the state of the board and the previous clue.
+
+In guesser_gpt.AIGuesser, the LLM is prompted to return exactly one board word, which is then normalized and matched against the remaining words on the board.
 
 
 
@@ -211,74 +208,37 @@ Note: The installation of the [Anaconda Distribution](https://www.anaconda.com/d
 
 Example installation order:
 ```
-(base) conda create --name codenames python=3.6
+(base) conda create --name codenames python=3.10
 (base) conda activate codenames
-(codenames) conda install gensim
-(codenames) pip install -U gensim
-(codenames) pip install -U nltk
-(codenames) python
->>> import nltk
->>> nltk.download('all')
->>> exit()
-(codenames) pip install -U colorama
-(codenames) git clone https://github.com/CodenamesAICompetition/Game.git
-(codenames) cd codenames
+(codenames) pip install streamlit openai google-genai
+
 ```
+You also need the Codenames project files (this repository), which include:
+* run_game.py
+* ui_app.py
+* codenames/game.py
+* codenames/players/codemaster.py, codenames/players/guesser.py
+* codenames/players/codemaster_gpt.py, codenames/players/guesser_gpt.py
+* codenames/players/gpt_manager.py
+Make sure the repository root is on your PYTHONPATH (for example, by running commands from the repo root or installing it as a package).
+To check that everything is installed without error, you can run something like: python -c "import streamlit, openai, google"
 
-Alternatively you can use your system's packaging system. (*apt-get* on Debian, or *MacPorts/Homebrew* on macOS)
-Or just use Python's packaging system, pip3, which is included by default from the Python binary installer.
+The original framework also depended on gensim, nltk, and large word vector files (GloVe, Google News word2vec) for vector-based bots. These are not required if you only use the GPT-based LLM agents.
 
-To check that everything is installed without error type in a terminal:  
-`$ python3 -c "import scipy, numpy, gensim.models.keyedvectors, argparse, importlib, nltk, nltk.corpus, nltk.stem"`
+## OpenAI & Gemini GPT Agents
+The GPT-based Codemaster and Guesser are implemented in:
+* codenames.players.codemaster_gpt.AICodemaster
+* codenames.players.guesser_gpt.AIGuesser
+Both use the GPT wrapper defined in gpt_manager.py.
 
-Installing Gensim:
+## API keys and provider selection
+Instead of editing the source file to add API keys, this version uses environment variables.
+Set the following before running:
+* OpenAI : export OPENAI_API_KEY="your-openai-key"
+* Gemini : export GEMINI_API_KEY="your-gemini-key"
+* Provider : export LLM_PROVIDER="openai"   # or "gemini"
+When using the Streamlit UI, the sidebar “Backend” radio button automatically sets LLM_PROVIDER for you.
 
-* Using Anaconda:
-```conda install gensim```
-
-* For Windows User using Conda Prompt(as well as the command on top):
-```pip install -U gensim```
-
-* For macOS, using Anaconda(same as above) or easy_install:
-```sudo easy_install --upgrade gensim```
-
-Installation of NLTK on macOS/linux:
-* Install python3 on your operation system. If python 2 and python 3 coexists in your Operating System than you must specify `python3` for your commands.
-* For macOS users, who don't have `pip3` or `python3` recognized in terminal, simply open terminal and type in `brew install python3` and check to see if `pip3` is a recognized command. If it is move on to the next step, if not type `brew postinstall python3`, or alternatively visit the [Python](https://python.org) website.
-* Type in `sudo pip3 install -U nltk`
-* Finally type in terminal (this installs all nltk packages, as opposed to a select few):
-```
-python
->>> import nltk
->>> nltk.download('all')
-```
-
-*Note for Windows user: Use the conda bash prompt for general purpose testing/running (as opposed to git bash)*
-
-Installation of NLTK on Windows:
-```pip install -U nltk```
-```
-python
->>> import nltk
->>> nltk.download('all')
-```
-
-Install colorama for colored console output:
-```pip install -U colorama```
+After setting the environment variables, you can run the GPT agents via: Streamlit UI as described above.
 
 
-### These files can optionally be installed as well, provide path through command arguments:
-* [Glove Vectors](https://nlp.stanford.edu/data/glove.6B.zip) (~2.25 GB)
-* [Google News Vectors](https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit) (~3.5 GB)
-
-
-## OpenAI GPT Agent
-
-* Open gpt_manager.py and add your OpenAI API key near the top of the file where it says "Enter Your API key here".
-* After this, you should be able to use the codemaster_gpt and guesser_gpt agents.
-* For example, running "python run_game.py players.codemaster_gpt.AICodemaster players.guesser_gpt.AIGuesser" will perform a single round game between both GPT agents.
-
-## CoG 2024 Results
-
-Full results for the paper "Prompt Engineering ChatGPT for Codenames", presented at IEEE CoG 2024, are located in the results.zip file.
-To replicate these results for a specific prompt engineering technique, uncomment the desired technique section in codemaster_gpt.py and then run GPT_experiments.py

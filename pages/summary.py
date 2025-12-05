@@ -32,7 +32,7 @@ def _load_stats_from_disk():
             data["OpenAI"] = data.pop("Real")
         data.setdefault("Mock", {})
         data.setdefault("OpenAI", {})
-        data.setdefault("Gemini", {})   # NEW
+        data.setdefault("Gemini", {})
         return data
     except FileNotFoundError:
         return {"Mock": {}, "OpenAI": {}, "Gemini": {}}
@@ -48,7 +48,7 @@ def _save_stats_to_disk(stats):
     os.replace(tmp, STATS_PATH)
 
 # =========================================================
-#  TURNS-BASED SUMMARY
+#  TURNS-BASED SUMMARY (ONLY)
 # =========================================================
 
 def summarize_turns(rec: dict):
@@ -137,51 +137,6 @@ def add_totals_turns(df: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([df, totals_df], ignore_index=True)
 
 # =========================================================
-#  SCORE-BASED SUMMARY  (like paper Table I)
-# =========================================================
-
-def summarize_scores(rec: dict):
-    # Prefer paper_scores (turns/25 style); then scores; finally fall back to turns
-    scores = rec.get("paper_scores") or rec.get("scores")
-    if not scores:
-        scores = rec.get("turns", []) or []
-    n = len(scores)
-
-    if n:
-        mean_score = round(mean(scores), 3)
-        median_score = median(scores)
-        min_score = min(scores)
-        std_score = round(pstdev(scores), 3) if n >= 2 else 0.0
-    else:
-        mean_score = median_score = min_score = std_score = 0.0
-
-    wins = rec.get("wins", 0)
-    losses = rec.get("losses", 0)
-    games_with_outcome = wins + losses or rec.get("runs", 0)
-    loss_rate = (losses / games_with_outcome * 100) if games_with_outcome else 0.0
-
-    return {
-        "Mean": mean_score,
-        "Median": median_score,
-        "Min": min_score,
-        "Std Dev": std_score,
-        "Loss": f"{loss_rate:.1f}%",   # loss % column
-    }
-
-def build_scores_df(tech_dict: dict) -> pd.DataFrame:
-    rows = []
-    for tech, rec in tech_dict.items():
-        row = {"Agent": tech}   # column name matches paper
-        row.update(summarize_scores(rec))
-        rows.append(row)
-    rows.sort(key=lambda r: r["Agent"].lower())
-    if rows:
-        return pd.DataFrame(rows)
-    return pd.DataFrame(
-        columns=["Agent", "Mean", "Median", "Min", "Std Dev", "Loss"]
-    )
-
-# =========================================================
 #  LOAD STATS
 # =========================================================
 
@@ -197,14 +152,15 @@ if col1.button("Reload from disk"):
     stats = st.session_state.tech_stats
     st.success("Reloaded summary from results/tech_stats.json")
 
-if col2.button("Clear summary (both buckets)"):
-    st.session_state.tech_stats = {"Mock": {}, "OpenAI": {}}
+# Clear all three buckets: Mock, OpenAI, Gemini
+if col2.button("Clear summary (all buckets)"):
+    st.session_state.tech_stats = {"Mock": {}, "OpenAI": {}, "Gemini": {}}
     _save_stats_to_disk(st.session_state.tech_stats)
     stats = st.session_state.tech_stats
-    st.warning("Cleared summary. File updated.")
+    st.warning("Cleared summary for Mock, OpenAI and Gemini. File updated.")
 
 # =========================================================
-#  TABS: MOCK vs OPENAI
+#  TABS: MOCK vs OPENAI vs GEMINI (TURNS ONLY)
 # =========================================================
 
 tab1, tab2, tab3 = st.tabs(["Mock mode", "OpenAI (GPT)", "Gemini"])
@@ -223,17 +179,6 @@ with tab1:
         mime="text/csv",
     )
 
-    st.markdown("---")
-    st.subheader("Score-based stats (like paper Table I)")
-    df_scores = build_scores_df(bucket)
-    st.dataframe(df_scores, width="stretch")
-    st.download_button(
-        "Download CSV (Mock - scores)",
-        df_scores.to_csv(index=False).encode("utf-8"),
-        file_name="summary_mock_scores.csv",
-        mime="text/csv",
-    )
-
 with tab2:
     bucket = stats.get("OpenAI", {})
 
@@ -248,18 +193,9 @@ with tab2:
         mime="text/csv",
     )
 
-    st.markdown("---")
-    st.subheader("Score-based stats (like paper Table I)")
-    df_scores = build_scores_df(bucket)
-    st.dataframe(df_scores, width="stretch")
-    st.download_button(
-        "Download CSV (OpenAI - scores)",
-        df_scores.to_csv(index=False).encode("utf-8"),
-        file_name="summary_openai_scores.csv",
-        mime="text/csv",
-    )
 with tab3:
     bucket = stats.get("Gemini", {})
+
     st.subheader("Turns-based stats (how fast the game ends)")
     df_turns = build_df_turns(bucket)
     df_turns = add_totals_turns(df_turns)
@@ -268,16 +204,5 @@ with tab3:
         "Download CSV (Gemini - turns)",
         df_turns.to_csv(index=False).encode("utf-8"),
         file_name="summary_gemini_turns.csv",
-        mime="text/csv",
-    )
-
-    st.markdown("---")
-    st.subheader("Score-based stats (like paper Table I)")
-    df_scores = build_scores_df(bucket)
-    st.dataframe(df_scores, width="stretch")
-    st.download_button(
-        "Download CSV (Gemini - scores)",
-        df_scores.to_csv(index=False).encode("utf-8"),
-        file_name="summary_gemini_scores.csv",
         mime="text/csv",
     )

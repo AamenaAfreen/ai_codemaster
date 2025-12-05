@@ -19,7 +19,7 @@ class AICodemaster(Codemaster):
         # Decide provider + model: OpenAI GPT vs Gemini
         provider = os.getenv("LLM_PROVIDER", "openai").lower()
         if provider == "gemini":
-            model = "gemini-2.5-flash-lite"   # change if you use a different Gemini model
+            model = "gemini-2.5-flash-lite" #"gemini-3-pro-preview"   # change if you use a different Gemini model
         else:
             model = "gpt-4o-2024-05-13"  # OpenAI default
 
@@ -32,21 +32,6 @@ class AICodemaster(Codemaster):
         self.maps = []
 
 
-   
-    # def __init__(self, team: str = "Red", strategy: str = "Default"):
-    #     super().__init__()
-    #     self.team = team
-    #     self.strategy = strategy
-    #     system_prompt = (
-    #         game_rules
-    #         + f"You are playing the game Codenames as the {team} Codemaster. "
-    #         + "Never reveal hidden roles. Only return clues when asked."
-    #     )
-    #     # Pin a model version that exists in your GPT manager (change if needed)
-    #     self.manager = GPT(system_prompt=system_prompt, version="gpt-4o-2024-05-13")
-    #     self.words = []
-    #     self.maps = []
-    
     
     def set_game_state(self, words, maps):
         """
