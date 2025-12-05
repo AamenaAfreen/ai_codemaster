@@ -16,19 +16,6 @@ class AIGuesser(Guesser):
     - "Solo Performance"
     """
 
-    # def __init__(self, team: str = "Red", strategy: str = "Default"):
-    #     super().__init__()
-    #     self.team = team
-    #     self.strategy = strategy  # <— new
-    #     self.num = 0
-    #     self.guesses = 0
-
-    #     system_prompt = (
-    #         game_rules
-    #         + f"You are playing the game Codenames as the {team} Guesser. "
-    #         + "Never reveal hidden roles. Only return guesses when asked. "
-    #     )
-    #     self.manager = GPT(system_prompt=system_prompt, version="gpt-4o-2024-05-13")
 
     def __init__(self, team: str = "Red", strategy: str = "Default"):
         super().__init__()
@@ -47,6 +34,7 @@ class AIGuesser(Guesser):
         provider = os.getenv("LLM_PROVIDER", "openai").lower()
         if provider == "gemini":
             model = "gemini-2.5-flash-lite"
+            # "gemini-3-pro-preview"
         else:
             model = "gpt-4o-2024-05-13"
 
