@@ -9,11 +9,25 @@ st.title("Summary")
 STATS_PATH = os.path.join("results", "tech_stats.json")
 
 # ---- helpers: load/save ----
+# def _load_stats_from_disk():
+#     try:
+#         with open(STATS_PATH, "r", encoding="utf-8") as f:
+#             data = json.load(f)
+#         # migrate old "Real" bucket to "OpenAI" if present
+#         if "OpenAI" not in data and "Real" in data:
+#             data["OpenAI"] = data.pop("Real")
+#         data.setdefault("Mock", {})
+#         data.setdefault("OpenAI", {})
+#         return data
+#     except FileNotFoundError:
+#         return {"Mock": {}, "OpenAI": {}}
+#     except Exception:
+#         return {"Mock": {}, "OpenAI": {}}
+
 def _load_stats_from_disk():
     try:
         with open(STATS_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
-        # migrate old "Real" bucket to "OpenAI" if present
         if "OpenAI" not in data and "Real" in data:
             data["OpenAI"] = data.pop("Real")
         data.setdefault("Mock", {})
@@ -71,7 +85,6 @@ def summarize_turns(rec: dict):
         "Loss rate": f"{loss_rate:.1f}%",
     }
 
-
 def build_df_turns(tech_dict: dict) -> pd.DataFrame:
     rows = []
     for tech, rec in tech_dict.items():
@@ -95,7 +108,6 @@ def build_df_turns(tech_dict: dict) -> pd.DataFrame:
             "Loss rate",
         ]
     )
-
 
 def add_totals_turns(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
