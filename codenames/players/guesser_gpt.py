@@ -223,16 +223,47 @@ class AIGuesser(Guesser):
                 )
                 initial_guess = self.manager.talk_to_ai(initial_prompt)
 
-                critique_prompt = (
-                    f"Your initial guess was: {initial_guess}. "
-                    f"Clue: ({self.clue}, {self.num}). Remaining words: {remaining}. "
-                    "You are the RED team guesser. Review whether your initial guess is the strongest match for the clue. "
-                    "Is there a word in the remaining list with an even clearer semantic connection to the clue? "
-                    "Pick the word you are MOST CONFIDENT belongs to the RED team — the one most directly tied to the clue. "
-                    "If you are not sure, keep your initial guess rather than switching. "
-                    "Return ONLY the single best word from the remaining list."
-                )
-                response = self.manager.talk_to_ai(critique_prompt)
+                # Critique variant is selectable via SELF_REFINE_CRITIQUE for the
+                # critique-ablation study:
+                #   buggy      - original negative-framing prompt (reason about hidden roles)
+                #   fixed      - positive clue-association reframe (default)
+                #   verifiable - critique grounded ONLY in clue<->word association (no hidden
+                #                roles): a question the Guesser can actually answer
+                #   none       - ablation: no critique step, keep the initial guess
+                variant = os.getenv("SELF_REFINE_CRITIQUE", "fixed").lower()
+                if variant == "none":
+                    response = initial_guess
+                else:
+                    if variant == "buggy":
+                        critique_prompt = (
+                            f"You guessed: {initial_guess}. "
+                            f"Clue: ({self.clue}, {self.num}). Remaining words: {remaining}. "
+                            "Check if this guess could accidentally be Blue/Civilian/Assassin if this were a real board. "
+                            "If the guess is risky, suggest a safer one from the remaining words. "
+                            "Return ONLY the final safest word."
+                        )
+                    elif variant == "verifiable":
+                        critique_prompt = (
+                            f"Your initial guess was: {initial_guess}. "
+                            f"Clue: ({self.clue}, {self.num}). Remaining words: {remaining}. "
+                            f"Consider ONLY how strongly each remaining word is associated in meaning "
+                            f"with the clue word '{self.clue}'. Is there a remaining word whose meaning is "
+                            f"MORE strongly associated with '{self.clue}' than your initial guess? "
+                            "Judge purely by word association; do NOT try to infer hidden roles. "
+                            "If another word is more strongly associated, return it; otherwise keep your "
+                            "initial guess. Return ONLY the single word."
+                        )
+                    else:  # fixed
+                        critique_prompt = (
+                            f"Your initial guess was: {initial_guess}. "
+                            f"Clue: ({self.clue}, {self.num}). Remaining words: {remaining}. "
+                            "You are the RED team guesser. Review whether your initial guess is the strongest match for the clue. "
+                            "Is there a word in the remaining list with an even clearer semantic connection to the clue? "
+                            "Pick the word you are MOST CONFIDENT belongs to the RED team — the one most directly tied to the clue. "
+                            "If you are not sure, keep your initial guess rather than switching. "
+                            "Return ONLY the single best word from the remaining list."
+                        )
+                    response = self.manager.talk_to_ai(critique_prompt)
 
             # ---------- SOLO PERFORMANCE ----------
             elif label in {"solo performance", "solo-performance", "solo_performance"}:

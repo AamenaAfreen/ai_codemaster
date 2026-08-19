@@ -158,29 +158,34 @@ class AICodemaster(Codemaster):
                 prompt += "The clue should avoid associations with Blue, Assassin and Civilian words. "
                 initial_response = self.manager.talk_to_ai(prompt)
 
-                other_words = "{" + str(blue).replace("[", "").replace("]", "").replace("'", "") + ", " + \
-                            str(assassin).replace("[", "").replace("]", "").replace("'", "") + ", " + \
-                            str(civilian).replace("[","").replace("]", "").replace("'", "") + "}"
-                prompt = "Evaluate the Codenames clue " + initial_response + " for the Red words {" + \
-                        str(red).replace("[","").replace("]","").replace("'","") + "} and avoid words " + other_words + \
-                        " on how related it is to the red words, and likelihood of accidental associate with blue, assassin, or civilian words."
-                prompt += """
-                    Give your answer in the form:
-                    Feedback:
-                    …
-                """
-                feedback = self.manager.talk_to_ai(prompt, max_tokens=150)
+                # CM_CRITIQUE=off ablates the critique+refine step (keeps initial clue),
+                # mirroring the Guesser's SELF_REFINE_CRITIQUE=none for the role x critique 2x2.
+                if os.getenv("CM_CRITIQUE", "on").lower() == "off":
+                    response = initial_response
+                else:
+                    other_words = "{" + str(blue).replace("[", "").replace("]", "").replace("'", "") + ", " + \
+                                str(assassin).replace("[", "").replace("]", "").replace("'", "") + ", " + \
+                                str(civilian).replace("[","").replace("]", "").replace("'", "") + "}"
+                    prompt = "Evaluate the Codenames clue " + initial_response + " for the Red words {" + \
+                            str(red).replace("[","").replace("]","").replace("'","") + "} and avoid words " + other_words + \
+                            " on how related it is to the red words, and likelihood of accidental associate with blue, assassin, or civilian words."
+                    prompt += """
+                        Give your answer in the form:
+                        Feedback:
+                        …
+                    """
+                    feedback = self.manager.talk_to_ai(prompt, max_tokens=150)
 
-                prompt = "The remaining words are: "
-                prompt += "Red: " + str(red) + ". "
-                prompt += "Blue: " + str(blue) + ". "
-                prompt += "Civilian: " + str(civilian) + ". "
-                prompt += "Assassin: " + str(assassin) + ". "
-                prompt += "Refine the initial Codenames clue '" + initial_response + "' for the above words based on the following feedback: '" + feedback + "'. "
-                prompt += "You can stick with the initial clue if the feedback indicates that this is a good choice. "
-                prompt += "Provide a single word clue and number for the guesser in the following format ('pebble',2). "
-                prompt += "Stick to this format exactly and provide no additional text. "
-                response = self.manager.talk_to_ai(prompt)
+                    prompt = "The remaining words are: "
+                    prompt += "Red: " + str(red) + ". "
+                    prompt += "Blue: " + str(blue) + ". "
+                    prompt += "Civilian: " + str(civilian) + ". "
+                    prompt += "Assassin: " + str(assassin) + ". "
+                    prompt += "Refine the initial Codenames clue '" + initial_response + "' for the above words based on the following feedback: '" + feedback + "'. "
+                    prompt += "You can stick with the initial clue if the feedback indicates that this is a good choice. "
+                    prompt += "Provide a single word clue and number for the guesser in the following format ('pebble',2). "
+                    prompt += "Stick to this format exactly and provide no additional text. "
+                    response = self.manager.talk_to_ai(prompt)
 
             # ---------- SOLO-PERFORMANCE ----------
             elif label in {"solo performance", "solo-performance", "solo_performance"}:

@@ -229,3 +229,16 @@ results/dataset_*.csv
 
 # Claude Code session data
 .claude/
+
+# Raw per-game traces from the Self-Refine critique ablation
+# (results/ab_selfrefine/summary.json is tracked; regenerate traces with run_selfrefine_ab.py)
+results/ab_selfrefine/buggy/
+results/ab_selfrefine/fixed/
+results/ab_selfrefine/none/
+results/ab_selfrefine/verifiable/
+
+# Local working notes, not part of the published artifact
+docs/interview_prep.md
+docs/project_brief.md
+project_brief.md
+AIIDE-26_paper_103*.pdf
