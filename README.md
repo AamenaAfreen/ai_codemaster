@@ -2,7 +2,7 @@
 
 A framework for systematically evaluating prompt-engineering strategies for LLM agents playing the cooperative word game [Codenames](https://czechgames.com/en/codenames/). Built on top of the [Codenames AI Competition](https://github.com/alanabibi/codenames) framework, extended for multi-provider batch experimentation and research.
 
-This project reproduces and extends *Prompt Engineering ChatGPT for Codenames* (Sidji & Stephenson, 2023), testing all **36 cross-strategy combinations** (6 Codemaster × 6 Guesser) across **30 fixed board seeds** using GPT-4o-mini and Gemini 2.5 Flash Lite — 1,765 valid games in total. This work is part of a co-authored submission to AIIDE 2026.
+This project reproduces and extends *Prompt Engineering ChatGPT for Codenames* (Sidji & Stephenson, 2024), testing all **36 cross-strategy combinations** (6 Codemaster × 6 Guesser) across **30 fixed board seeds** on GPT-4o-mini (1,101 games), plus a 24-combination subset on Gemini 2.5 Flash Lite (664 games) — 1,765 valid games in total. This work is part of a co-authored submission to AIIDE 2026.
 
 ---
 
@@ -12,7 +12,7 @@ This project reproduces and extends *Prompt Engineering ChatGPT for Codenames* (
 |---|---|
 | Best combo (OpenAI) | COT Codemaster + Cautious Guesser — **96% win rate** |
 | Guesser strategy dominates | Swapping guesser strategy has far more impact on win rate than swapping codemaster strategy |
-| Cautious Guesser lifts any CM | Paired with any codemaster, Cautious Guesser achieves 72–96% win rate |
+| Cautious Guesser lifts any CM | Paired with any codemaster, Cautious Guesser achieves 67–96% win rate |
 | Self-Refine failure mode | The uninformed guesser's self-critique overrode its own answers 93–99% of the time, converting correct picks to wrong ones in 60% of changes (buggy variant: 87% assassin rate). Rewording the critique didn't help — removing it took win rate from 22% to 73% |
 | Reflection asymmetry | The same critique step *helped* the informed Codemaster (+10 pts in a controlled 2×2) — self-reflection only helps an agent with information to reflect on |
 | Overall OpenAI win rate | 60.2% across 1,101 games |
